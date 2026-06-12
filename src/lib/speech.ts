@@ -1,43 +1,55 @@
 /**
  * Centralized Vietnamese Text-to-Speech (TTS) Manager
+ * 
+ * Strategy:
+ * 1. Primary: Google Cloud TTS API via server endpoint /api/tts
+ *    → Uses vi-VN-Wavenet-A (soft, natural female Vietnamese voice)
+ *    → Perfect for children's educational content
+ * 2. Fallback: Browser's Web Speech API (SpeechSynthesis)
+ *    → Used when server is unavailable or API key missing
+ * 3. Audio caching: In-memory cache to avoid redundant API calls
  */
 
-// Helper to determine if speech synthesis is supported by browser/OS
+// ─── Audio Cache ───────────────────────────────────────────────
+const audioCache = new Map<string, string>(); // text → objectURL
+const MAX_CACHE_SIZE = 100;
+
+function getCacheKey(text: string, pitch: number, rate: number): string {
+  return `${text}__p${pitch}__r${rate}`;
+}
+
+// ─── Speech State ──────────────────────────────────────────────
+let currentAudio: HTMLAudioElement | null = null;
+let isFetchingTTS = false;
+
+// ─── Public Helpers ────────────────────────────────────────────
+
 export function isSpeechSupported(): boolean {
-  return typeof window !== "undefined" && !!window.speechSynthesis;
+  return typeof window !== "undefined";
 }
 
-// Helper to check if a Vietnamese voice is actually installed on the system
 export function hasVietnameseVoice(): boolean {
-  if (!isSpeechSupported()) return false;
-  const voices = window.speechSynthesis.getVoices();
-  return voices.some(
-    (v) =>
-      v.lang.startsWith("vi") ||
-      v.lang.includes("Vietnam") ||
-      v.lang.toLowerCase().includes("vi-vn")
-  );
+  // We always have Vietnamese via server TTS
+  return true;
 }
 
-// Helper to check if speech is enabled in parent settings (default to false as requested)
 export function isSpeechEnabled(): boolean {
   if (typeof window === "undefined") return false;
-  // If not configured, we default to "false" (disabled) to fulfill "Bỏ tính năng giọng đọc"
   const val = localStorage.getItem("kid_voice_enabled");
   return val === "true";
 }
 
-// Toggle speech enabled state
 export function setSpeechEnabled(enabled: boolean) {
   if (typeof window === "undefined") return;
   localStorage.setItem("kid_voice_enabled", enabled ? "true" : "false");
 }
 
-// Central speak function with safety check and optimized config for children
+// ─── Core Speak Function ───────────────────────────────────────
+
 export function speak(
   text: string,
-  options?: { 
-    pitch?: number; 
+  options?: {
+    pitch?: number;
     rate?: number;
     onStart?: () => void;
     onEnd?: () => void;
@@ -47,36 +59,173 @@ export function speak(
 ) {
   if (!isSpeechSupported()) return;
 
-  // 1. Check if user enabled the speech feature (unless forced by manual click)
+  // Check if user enabled speech (unless forced by manual click)
   if (!isSpeechEnabled() && !options?.force) {
     return;
   }
 
-  const synth = window.speechSynthesis;
+  // Cancel any active speech
+  cancelSpeech();
 
-  // Cancel any active speech to avoid queue stacking
+  // Clean the text
+  const cleanText = text.replace(/^\[.*?\]\s*/, "").trim();
+  if (!cleanText) return;
+
+  const pitch = options?.pitch ?? 1.0;
+  const rate = options?.rate ?? 0.95;
+  const cacheKey = getCacheKey(cleanText, pitch, rate);
+
+  // Check cache first
+  const cachedUrl = audioCache.get(cacheKey);
+  if (cachedUrl) {
+    playAudioFromUrl(cachedUrl, options);
+    return;
+  }
+
+  // Try server TTS first, fallback to browser
+  fetchServerTTS(cleanText, rate, cacheKey, options);
+}
+
+// ─── Server TTS via Google Cloud ───────────────────────────────
+
+async function fetchServerTTS(
+  text: string,
+  rate: number,
+  cacheKey: string,
+  options?: {
+    pitch?: number;
+    rate?: number;
+    onStart?: () => void;
+    onEnd?: () => void;
+    onError?: () => void;
+    force?: boolean;
+  }
+) {
+  if (isFetchingTTS) return;
+  isFetchingTTS = true;
+
+  try {
+    const response = await fetch("/api/tts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        text: text,
+        speakingRate: rate,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`TTS server returned ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    if (data.audioContent) {
+      // Decode base64 audio and create blob URL
+      const audioBytes = atob(data.audioContent);
+      const audioArray = new Uint8Array(audioBytes.length);
+      for (let i = 0; i < audioBytes.length; i++) {
+        audioArray[i] = audioBytes.charCodeAt(i);
+      }
+      const blob = new Blob([audioArray], { type: "audio/mp3" });
+      const objectUrl = URL.createObjectURL(blob);
+
+      // Cache the audio URL
+      if (audioCache.size >= MAX_CACHE_SIZE) {
+        // Remove oldest entry
+        const firstKey = audioCache.keys().next().value;
+        if (firstKey) {
+          const oldUrl = audioCache.get(firstKey);
+          if (oldUrl) URL.revokeObjectURL(oldUrl);
+          audioCache.delete(firstKey);
+        }
+      }
+      audioCache.set(cacheKey, objectUrl);
+
+      // Play the audio
+      playAudioFromUrl(objectUrl, options);
+    } else {
+      throw new Error("No audio content in response");
+    }
+  } catch (error) {
+    console.warn("Server TTS failed, falling back to browser speech:", error);
+    fallbackBrowserSpeak(text, options);
+  } finally {
+    isFetchingTTS = false;
+  }
+}
+
+// ─── Audio Playback ────────────────────────────────────────────
+
+function playAudioFromUrl(
+  url: string,
+  options?: {
+    pitch?: number;
+    rate?: number;
+    onStart?: () => void;
+    onEnd?: () => void;
+    onError?: () => void;
+  }
+) {
+  cancelSpeech();
+
+  const audio = new Audio(url);
+  currentAudio = audio;
+
+  // Adjust playback rate for children's comprehension
+  audio.playbackRate = options?.rate ?? 0.95;
+
+  audio.onplay = () => {
+    options?.onStart?.();
+  };
+
+  audio.onended = () => {
+    currentAudio = null;
+    options?.onEnd?.();
+  };
+
+  audio.onerror = () => {
+    currentAudio = null;
+    options?.onError?.();
+  };
+
+  audio.play().catch((err) => {
+    console.warn("Audio playback failed:", err);
+    currentAudio = null;
+    options?.onError?.();
+  });
+}
+
+// ─── Browser Fallback (Web Speech API) ─────────────────────────
+
+function fallbackBrowserSpeak(
+  text: string,
+  options?: {
+    pitch?: number;
+    rate?: number;
+    onStart?: () => void;
+    onEnd?: () => void;
+    onError?: () => void;
+  }
+) {
+  if (typeof window === "undefined" || !window.speechSynthesis) {
+    options?.onError?.();
+    return;
+  }
+
+  const synth = window.speechSynthesis;
   synth.cancel();
 
-  // Clean the text from custom system prefixes like [system] etc.
-  const cleanText = text.replace(/^\[.*?\]\s*/, "");
-  if (!cleanText.trim()) return;
-
-  const utterance = new SpeechSynthesisUtterance(cleanText);
-
-  // Set Vietnamese language tag
+  const utterance = new SpeechSynthesisUtterance(text);
   utterance.lang = "vi-VN";
-  
-  // Child-friendly voice tone adjustments
-  utterance.pitch = options?.pitch ?? 1.35; // Kinder, higher pitch
-  utterance.rate = options?.rate ?? 0.95;   // Slightly slower for children's comprehension
+  utterance.pitch = options?.pitch ?? 1.35;
+  utterance.rate = options?.rate ?? 0.95;
 
-  // Event callbacks
   if (options?.onStart) utterance.onstart = options.onStart;
   if (options?.onEnd) utterance.onend = options.onEnd;
   if (options?.onError) utterance.onerror = options.onError;
 
-
-  // Attempt to select the native Vietnamese voice
+  // Try to find Vietnamese voice
   const voices = synth.getVoices();
   const viVoice = voices.find(
     (v) =>
@@ -87,39 +236,23 @@ export function speak(
 
   if (viVoice) {
     utterance.voice = viVoice;
-  } else {
-    // If voices are loaded but there's absolutely no Vietnamese voice,
-    // and the default browser speech synthesis language is not Vietnamese,
-    // we cancel speaking to prevent English-accent gibberish reading.
-    const isBrowserVi = navigator.language.startsWith("vi");
-    if (voices.length > 0 && !isBrowserVi) {
-      console.warn("Vietnamese TTS voice not found on this device. Speech cancelled to avoid incorrect accent.");
-      return;
-    }
-  }
-
-  // Handle voices changing dynamically (Web Speech API quirk)
-  if (synth.onvoiceschanged === undefined) {
-    synth.onvoiceschanged = () => {
-      const updatedVoices = synth.getVoices();
-      const updatedViVoice = updatedVoices.find(
-        (v) =>
-          v.lang.startsWith("vi") ||
-          v.lang.includes("Vietnam") ||
-          v.lang.toLowerCase().includes("vi-vn")
-      );
-      if (updatedViVoice && !utterance.voice) {
-        utterance.voice = updatedViVoice;
-      }
-    };
   }
 
   synth.speak(utterance);
 }
 
-// Stop any speaking in progress
+// ─── Cancel Speech ─────────────────────────────────────────────
+
 export function cancelSpeech() {
-  if (isSpeechSupported()) {
+  // Stop HTML5 audio
+  if (currentAudio) {
+    currentAudio.pause();
+    currentAudio.currentTime = 0;
+    currentAudio = null;
+  }
+
+  // Also cancel browser speech synthesis as fallback
+  if (typeof window !== "undefined" && window.speechSynthesis) {
     window.speechSynthesis.cancel();
   }
 }
