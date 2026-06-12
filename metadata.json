@@ -1,0 +1,6 @@
+{
+  "name": "Bé Học Vui - Hành Trang Vào Lớp 1",
+  "description": "Ứng dụng tương tác vui nhộn giúp trẻ 5–6 tuổi làm quen chữ cái, toán học, tiếng Việt, tư duy logic cùng Trợ lý AI Gấu BiBi.",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
