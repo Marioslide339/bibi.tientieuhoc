@@ -51,7 +51,7 @@ export default function LettersModule({ onEarnStars, onAddBadge, onUpdateProfici
   // Vietnamese Alphabet Data - 29 Letters
   const alphabet = [
     { uppercase: "A", lowercase: "a", word: "Quả Táo 🍎", sound: "a" },
-    { uppercase: "Ă", lowercase: "ă", word: "Con Măng 🎍", sound: "ă" },
+    { uppercase: "Ă", lowercase: "ă", word: "Cái Măng 🎍", sound: "ă" },
     { uppercase: "Â", lowercase: "â", word: "Quả Mận 🍑", sound: "â" },
     { uppercase: "B", lowercase: "b", word: "Quả Bóng ⚽", sound: "bờ" },
     { uppercase: "C", lowercase: "c", word: "Con Cua 🦀", sound: "cờ" },
@@ -66,7 +66,7 @@ export default function LettersModule({ onEarnStars, onAddBadge, onUpdateProfici
     { uppercase: "L", lowercase: "l", word: "Con Lợn 🐷", sound: "lờ" },
     { uppercase: "M", lowercase: "m", word: "Con Mèo 🐱", sound: "mờ" },
     { uppercase: "N", lowercase: "n", word: "Quả Na 🍈", sound: "nờ" },
-    { uppercase: "O", lowercase: "o", word: "Chùm Ong 🐝", sound: "o" },
+    { uppercase: "O", lowercase: "o", word: "Con Ong 🐝", sound: "o" },
     { uppercase: "Ô", lowercase: "ô", word: "Cái Ô ☂️", sound: "ô" },
     { uppercase: "Ơ", lowercase: "ơ", word: "Lá Cờ 🚩", sound: "ơ" },
     { uppercase: "P", lowercase: "p", word: "Đèn Pin 🔦", sound: "pờ" },
@@ -81,9 +81,13 @@ export default function LettersModule({ onEarnStars, onAddBadge, onUpdateProfici
     { uppercase: "Y", lowercase: "y", word: "Y tá 👩‍⚕️", sound: "y" },
   ];
 
+  // Strip emoji characters from text for clean TTS pronunciation
+  const stripEmoji = (str: string) => str.replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE00}-\u{FE0F}\u{200D}\u{20E3}\u{E0020}-\u{E007F}]/gu, '').trim();
+
   const speakLetter = (text: string, word: string) => {
     SoundEffects.playPop();
-    speak(`Chữ ${text}. ${word}`, {
+    const cleanWord = stripEmoji(word);
+    speak(`Chữ ${text}. ${cleanWord}`, {
       pitch: 1.4,
       rate: 0.85,
       force: true
