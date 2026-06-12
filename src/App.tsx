@@ -27,6 +27,9 @@ export default function App() {
   const [badges, setBadges] = useState<string[]>([]);
   const [showConfetti, setShowConfetti] = useState(false);
   const [recentCelebration, setRecentCelebration] = useState<string>("");
+  const [userName, setUserName] = useState<string>("");
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [nameInput, setNameInput] = useState("");
 
   // Default Parent Stats database structures
   const [parentStats, setParentStats] = useState<ParentStats>({
@@ -61,10 +64,15 @@ export default function App() {
     const savedStars = localStorage.getItem("kid_stars");
     const savedBadges = localStorage.getItem("kid_badges");
     const savedStats = localStorage.getItem("kid_parent_stats");
+    const savedName = localStorage.getItem("kid_user_name");
 
     if (savedStars) setTotalStars(Number(savedStars));
     if (savedBadges) setBadges(JSON.parse(savedBadges));
     if (savedStats) setParentStats(JSON.parse(savedStats));
+    if (savedName) {
+      setUserName(savedName);
+      setIsLoggedIn(true);
+    }
   }, []);
 
   // Save changes to local storage
@@ -99,6 +107,19 @@ export default function App() {
     setParentStats(freshStats);
     localStorage.clear();
     setActiveModule("home");
+    setIsLoggedIn(false);
+    setUserName("");
+    setNameInput("");
+  };
+
+  // Handle login submission
+  const handleLogin = () => {
+    const trimmed = nameInput.trim();
+    if (trimmed.length > 0) {
+      setUserName(trimmed);
+      setIsLoggedIn(true);
+      localStorage.setItem("kid_user_name", trimmed);
+    }
   };
 
   // Add stars earned and log to historical activity feed
@@ -172,89 +193,119 @@ export default function App() {
     saveProgressData(totalStars, badges, nextStats);
   };
 
-  // Main navigation cards definitions: Bright neon colors, Pixar 3D-feeling captions
+  // Main navigation cards definitions: Icon-focused, minimal text for young children
   const categoriesList = [
     {
       id: "letters" as ActiveModule,
       emoji: "🔤",
-      title: "Làm quen chữ cái",
-      subtitle: "Học 29 mặt chữ Việt, tập chữ cái hoa thường và tập viết bút sáp!",
+      title: "Chữ cái",
       bgStyle: "from-rose-400 to-pink-500",
-      accentBg: "bg-rose-100 text-rose-700",
     },
     {
       id: "math" as ActiveModule,
       emoji: "🔢",
-      title: "Làm quen Toán học",
-      subtitle: "Nhận biết số 0-20, học phép đếm đố đèn cá sấu ăn số thích thú!",
+      title: "Toán học",
       bgStyle: "from-blue-400 to-sky-500",
-      accentBg: "bg-blue-100 text-blue-700",
     },
     {
       id: "language" as ActiveModule,
       emoji: "📚",
-      title: "Phát triển ngôn ngữ",
-      subtitle: "Xem truyện tranh phiêu lưu, lật từng trang truyện và đố trí tuệ!",
+      title: "Truyện tranh",
       bgStyle: "from-amber-400 to-orange-500",
-      accentBg: "bg-amber-100 text-amber-700",
     },
     {
       id: "logic" as ActiveModule,
       emoji: "🧠",
-      title: "Rèn luyện tư duy",
-      subtitle: "Tìm số khuyết, sắp đặt chuỗi quy luật hoa lá, đập dột tư duy sáng tạo!",
+      title: "Tư duy",
       bgStyle: "from-violet-400 to-purple-500",
-      accentBg: "bg-violet-100 text-violet-700",
     },
     {
       id: "world" as ActiveModule,
       emoji: "🌎",
-      title: "Thế giới quanh em",
-      subtitle: "Nghe đố tiếng thú kêu, tìm tổ chim rừng hoang dã, định vị giác quan cơ thể!",
+      title: "Khám phá",
       bgStyle: "from-emerald-400 to-teal-500",
-      accentBg: "bg-emerald-100 text-emerald-700",
     },
     {
       id: "coloring" as ActiveModule,
       emoji: "🎨",
-      title: "Tô màu sáng tạo",
-      subtitle: "Bảng sáp tô màu bức họa cún con, lâu đài ngôi nhà và dán sticker nhí!",
+      title: "Tô màu",
       bgStyle: "from-pink-400 to-rose-500",
-      accentBg: "bg-pink-100 text-pink-700",
     },
     {
       id: "music" as ActiveModule,
       emoji: "🎵",
-      title: "Âm nhạc múa mầm",
-      subtitle: "Karaoke liên khúc mầm non, gõ phím nhịp điệu rơi đầy sao nhạc đệm!",
+      title: "Âm nhạc",
       bgStyle: "from-cyan-400 to-blue-500",
-      accentBg: "bg-cyan-100 text-cyan-700",
     },
     {
       id: "exam" as ActiveModule,
       emoji: "🏆",
-      title: "Bé tài năng thi thố",
-      subtitle: "Căn phòng trạng nguyên mầm non cấp độ Dễ - Khó gộp toàn diện!",
+      title: "Thi đố",
       bgStyle: "from-indigo-400 to-violet-500",
-      accentBg: "bg-indigo-100 text-indigo-700",
     },
     {
       id: "achievements" as ActiveModule,
       emoji: "⭐",
-      title: "Bảng phong thành tích",
-      subtitle: "Mở khóa quà thú cưng phi hành gia, xem danh vọng huy hiệu bé rinh!",
+      title: "Thành tích",
       bgStyle: "from-yellow-400 to-amber-500",
-      accentBg: "bg-yellow-105 text-yellow-700 border border-yellow-300",
     },
     {
       id: "parents" as ActiveModule,
-      emoji: "👨‍👩‍👧",
-      title: "Góc đồng hành cha mẹ",
-      subtitle: "Đánh giá tiến triển đồ thị hình cột và nhận thư tư vấn AI từ giáo viên BiBi!",
+      emoji: "👨\u200D👩\u200D👧",
+      title: "Cha mẹ",
       bgStyle: "from-slate-600 to-slate-800",
-      accentBg: "bg-slate-100 text-slate-700",
     }
   ];
+
+  // ===================== LOGIN SCREEN =====================
+  if (!isLoggedIn) {
+    return (
+      <div id="login-screen" className="min-h-screen bg-gradient-to-b from-sky-200 via-amber-100 to-lime-100 flex items-center justify-center p-4 font-sans antialiased">
+        <div className="bg-white/80 backdrop-blur-xl rounded-[2rem] border-4 border-yellow-400 shadow-2xl p-8 max-w-md w-full text-center">
+          {/* Mascot */}
+          <div className="text-8xl mb-4 animate-bounce select-none">🐻</div>
+          
+          <h1 className="text-2xl md:text-3xl font-black text-amber-900 mb-2">
+            Xin chào bé yêu! 👋
+          </h1>
+          <p className="text-sm text-amber-700 font-semibold mb-6">
+            Gấu BiBi muốn biết tên bé nè!
+          </p>
+
+          {/* Name input */}
+          <div className="relative mb-6">
+            <input
+              id="name-input"
+              type="text"
+              value={nameInput}
+              onChange={(e) => setNameInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
+              placeholder="Nhập tên bé..."
+              className="w-full px-6 py-4 text-lg font-bold text-center text-amber-900 bg-amber-50 border-3 border-amber-300 rounded-2xl focus:outline-none focus:border-amber-500 focus:ring-4 focus:ring-amber-200 placeholder:text-amber-300 transition-all"
+              autoFocus
+              maxLength={30}
+            />
+            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-2xl select-none">✏️</span>
+          </div>
+
+          {/* Enter button */}
+          <button
+            id="login-button"
+            onClick={handleLogin}
+            disabled={nameInput.trim().length === 0}
+            className="w-full py-4 bg-gradient-to-r from-amber-400 via-orange-400 to-rose-400 text-white text-lg font-black rounded-2xl shadow-lg hover:shadow-2xl hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100 border-3 border-white flex items-center justify-center gap-3"
+          >
+            <span className="text-2xl">🚀</span>
+            Vào học nào!
+          </button>
+
+          <p className="text-[10px] text-amber-400 font-bold mt-4 select-none">
+            🎒 Bé Học Vui • Tiền Lớp 1
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div id="full-app-root-container" className="min-h-screen bg-gradient-to-b from-sky-100 via-amber-50 to-lime-50 text-slate-800 p-4 md:p-6 pb-24 font-sans antialiased relative selection:bg-amber-200">
@@ -276,7 +327,7 @@ export default function App() {
               Bé Học Vui <span className="text-xs bg-yellow-400 text-amber-950 font-black px-2.5 py-1 rounded-full uppercase scale-90 tracking-widest border border-amber-500">TIỀN LỚP 1</span>
             </h1>
             <p className="text-[10px] md:text-xs text-slate-500 leading-relaxed font-semibold mt-1">
-              Trang bị vàng: Chữ cái phong phú, toán học, tư duy cùng chú trợ lý Gấu BiBi AI dễ thương!
+              Chào <span className="text-amber-600 font-black">{userName}</span>! Gấu BiBi sẵn sàng cùng bé học vui rồi nè! 🐻
             </p>
           </div>
         </div>
@@ -310,25 +361,21 @@ export default function App() {
         {activeModule === "home" && (
           <div className="animate-in fade-in duration-300">
             
-            {/* Mascot welcoming card banner */}
-            <div className="bg-gradient-to-r from-yellow-300 via-amber-300 to-orange-400 p-6 rounded-3xl border-4 border-white shadow-xl flex flex-col md:flex-row items-center gap-5 mb-8 relative overflow-hidden">
-              <div className="absolute top-0 right-0 p-1 bg-yellow-400 text-yellow-905 text-[9px] font-black uppercase rounded-bl-xl">
-                BẢNG VÀNG THÔNG BÁO ⭐
-              </div>
-              
-              <span className="text-7xl animate-bounce select-none">🐻</span>
+            {/* Mascot welcoming card banner - simplified */}
+            <div className="bg-gradient-to-r from-yellow-300 via-amber-300 to-orange-400 p-5 rounded-3xl border-4 border-white shadow-xl flex items-center gap-4 mb-8 relative overflow-hidden">
+              <span className="text-6xl md:text-7xl animate-bounce select-none">🐻</span>
               <div className="text-slate-800 flex-1">
-                <h3 className="text-lg font-extrabold text-amber-950 mb-1 flex items-center gap-1">
-                  Chào bồ tèo yêu quý! Gấu BiBi đây! 👋
+                <h3 className="text-lg font-extrabold text-amber-950 mb-0.5">
+                  Chào {userName}! 👋
                 </h3>
-                <p className="text-xs text-amber-900 leading-relaxed font-semibold">
-                  Học đi đôi với hành! Bé hãy rinh trọn vẹn điểm thưởng từ các bài học kỳ bí phía dưới để khui quà, trò chuyện thú cưng nhé! Nhấn vào bong bóng Gấu BiBi ở góc dưới bên phải nếu cần BiBi bày cách chơi nghe!
+                <p className="text-xs text-amber-900 font-semibold">
+                  Hôm nay bé muốn học gì nào? 🚀
                 </p>
               </div>
             </div>
 
-            {/* Grid of the 10 Sections modules */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-10">
+            {/* Grid of modules - ICON FOCUSED, big touch targets */}
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 md:gap-5 mb-10">
               {categoriesList.map((cat) => (
                 <button
                   key={cat.id}
@@ -336,24 +383,16 @@ export default function App() {
                     SoundEffects.playPop();
                     setActiveModule(cat.id);
                   }}
-                  className={`group text-left rounded-3xl p-5 border-4 border-white shadow-lg bg-gradient-to-br ${cat.bgStyle} hover:scale-[1.02] active:scale-98 transition-all hover:shadow-2xl relative overflow-hidden h-36 flex flex-col justify-between`}
+                  className={`group rounded-3xl p-4 md:p-5 border-4 border-white shadow-lg bg-gradient-to-br ${cat.bgStyle} hover:scale-[1.04] active:scale-95 transition-all hover:shadow-2xl relative overflow-hidden flex flex-col items-center justify-center aspect-square`}
                 >
-                  {/* Glowing absolute asset details resembling Pixar visual highlights */}
-                  <div className="absolute right-3 top-3 opacity-15 text-7xl select-none group-hover:scale-115 transition-transform duration-500">
+                  {/* Large central emoji */}
+                  <span className="text-5xl md:text-6xl select-none mb-2 group-hover:scale-110 transition-transform duration-300 drop-shadow-lg">
                     {cat.emoji}
-                  </div>
+                  </span>
 
-                  <div>
-                    <span className="inline-block px-3 py-1 bg-white/20 backdrop-blur rounded-2xl text-xs font-black text-white mb-2 shadow-inner">
-                      {cat.emoji} {cat.title}
-                    </span>
-                    <p className="text-xs text-white/90 leading-relaxed font-bold tracking-tight pr-12">
-                      {cat.subtitle}
-                    </p>
-                  </div>
-
-                  <span className="text-[10px] font-extrabold text-white group-hover:underline flex items-center gap-1.5 mt-2">
-                    Khám phá chơi ngay 🚀💨
+                  {/* Minimal title only */}
+                  <span className="text-sm md:text-base font-black text-white drop-shadow tracking-tight text-center leading-tight">
+                    {cat.title}
                   </span>
                 </button>
               ))}
