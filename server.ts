@@ -293,6 +293,124 @@ Hãy trả về một định dạng JSON thuần túy (không bọc trong \`\`\
     }
   });
 
+  // ─── API 4: Vietnamese Text-to-Speech via Google Cloud TTS ─────
+  // Uses Google Cloud TTS API with the same Gemini API key
+  // Voice: vi-VN-Wavenet-A (soft, natural female Vietnamese — perfect for children)
+  // Fallback: vi-VN-Standard-A if Wavenet fails
+  
+  // Server-side TTS audio cache (text → base64 audio)
+  const ttsCache = new Map<string, string>();
+  const TTS_CACHE_MAX = 200;
+
+  app.post("/api/tts", async (req, res) => {
+    try {
+      const { text, speakingRate } = req.body;
+
+      if (!text || typeof text !== "string" || text.trim().length === 0) {
+        return res.status(400).json({ error: "Thiếu nội dung văn bản cần đọc." });
+      }
+
+      const cleanText = text.trim().substring(0, 500); // Limit text length
+      const rate = Math.max(0.5, Math.min(1.5, speakingRate || 0.9));
+      const cacheKey = `${cleanText}__${rate}`;
+
+      // Check server cache
+      if (ttsCache.has(cacheKey)) {
+        return res.json({ audioContent: ttsCache.get(cacheKey) });
+      }
+
+      const apiKey = process.env.GEMINI_API_KEY;
+      if (!apiKey || apiKey === "MY_GEMINI_API_KEY") {
+        return res.status(503).json({ 
+          error: "TTS không khả dụng - thiếu API key. Sử dụng giọng trình duyệt." 
+        });
+      }
+
+      // Google Cloud TTS API endpoint (accessible with Gemini API key)
+      const ttsUrl = `https://texttospeech.googleapis.com/v1/text:synthesize?key=${apiKey}`;
+
+      const ttsRequest = {
+        input: { text: cleanText },
+        voice: {
+          languageCode: "vi-VN",
+          name: "vi-VN-Wavenet-A", // Soft, natural female Vietnamese voice
+          ssmlGender: "FEMALE"
+        },
+        audioConfig: {
+          audioEncoding: "MP3",
+          speakingRate: rate,
+          pitch: 1.5, // Slightly higher pitch — friendly for children
+          volumeGainDb: 2.0, // Slightly louder for clarity
+          effectsProfileId: ["small-bluetooth-speaker-class-device"] // Optimize for mobile/tablet speakers
+        }
+      };
+
+      const ttsResponse = await fetch(ttsUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(ttsRequest)
+      });
+
+      if (!ttsResponse.ok) {
+        // Try Standard voice as fallback (lower quality but more available)
+        const fallbackRequest = {
+          ...ttsRequest,
+          voice: {
+            languageCode: "vi-VN",
+            name: "vi-VN-Standard-A",
+            ssmlGender: "FEMALE"
+          }
+        };
+
+        const fallbackResponse = await fetch(ttsUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(fallbackRequest)
+        });
+
+        if (!fallbackResponse.ok) {
+          const errText = await fallbackResponse.text();
+          console.error("Google Cloud TTS failed:", errText);
+          return res.status(502).json({ 
+            error: "TTS API không phản hồi. Sử dụng giọng trình duyệt." 
+          });
+        }
+
+        const fallbackData = await fallbackResponse.json();
+        if (fallbackData.audioContent) {
+          // Cache the result
+          if (ttsCache.size >= TTS_CACHE_MAX) {
+            const firstKey = ttsCache.keys().next().value;
+            if (firstKey) ttsCache.delete(firstKey);
+          }
+          ttsCache.set(cacheKey, fallbackData.audioContent);
+          return res.json({ audioContent: fallbackData.audioContent });
+        }
+
+        return res.status(502).json({ error: "Không nhận được audio từ TTS." });
+      }
+
+      const ttsData = await ttsResponse.json();
+
+      if (ttsData.audioContent) {
+        // Cache the result
+        if (ttsCache.size >= TTS_CACHE_MAX) {
+          const firstKey = ttsCache.keys().next().value;
+          if (firstKey) ttsCache.delete(firstKey);
+        }
+        ttsCache.set(cacheKey, ttsData.audioContent);
+        return res.json({ audioContent: ttsData.audioContent });
+      }
+
+      res.status(502).json({ error: "Không nhận được audio từ TTS." });
+    } catch (error: any) {
+      console.error("Error in TTS API:", error.message || error);
+      res.status(500).json({ 
+        error: "Lỗi hệ thống TTS. Sử dụng giọng trình duyệt thay thế." 
+      });
+    }
+  });
+
   // Serve static files in production or hook up Vite developer server
   if (process.env.NODE_ENV !== "production") {
     console.log("Starting server in development mode with Vite hot-reloading simulation...");
